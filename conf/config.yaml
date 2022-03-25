@@ -1,0 +1,12 @@
+root: ???
+action: ???
+
+datasets:
+  data: ${root}/data
+  processed: ${root}/processed_data
+  julia_data: ${.data}/juliadata/Data_Julia
+
+data:
+  years:
+    start: 2000
+    end: 2020

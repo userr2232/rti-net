@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Union, Optional
+from pathlib import Path
 
 
 def UTC_offset(df: pd.DataFrame, offset: float=-5, inplace: bool=False) -> Optional[pd.DataFrame]:
@@ -42,15 +43,16 @@ def sort_by_datetime(df: pd.DataFrame, inplace: bool=False) -> Optional[pd.DataF
     new_df.sort_values(by='datetime', inplace=True)
     return None if inplace else new_df
 
-def read_everything(years: List[int]) -> List[pd.DataFrame]:
-    julia_data = [ pd.read_table(f"JULIA_ESF_{year}.txt", 
+def read_everything(path: Union[Path, str], years: List[int]) -> List[pd.DataFrame]:
+    path = Path(path)
+    julia_data = [ pd.read_table(path / f"JULIA_ESF_{year}.txt", 
                                     sep='\s+',
                                     na_values='missing', 
                                     dtype={'UT1_UNIX': np.int64, 'GDALT': np.float, 'SNL': np.float}) \
                     for year in years ]
+    julia_data = [ UTC_offset(data) for data in julia_data ]
     julia_data = [ remove_data_from_other_years(df=data, year=year) for year, data in zip(years, julia_data) ]
     julia_data = [ rescale_SNR(data) if year >= 2015 else data for year, data in zip(years, julia_data) ]
-    julia_data = [ UTC_offset(data) for data in julia_data ]
     julia_data = [ drop_times_out_of_domain(data) for data in julia_data ]
     julia_data = [ drop_heights_out_of_domain(data) for data in julia_data ]
     return julia_data

@@ -1,6 +1,7 @@
 from sqlite3 import Timestamp
 import numpy as np
 from numpy.typing import ArrayLike
+from typing import Union
 import pandas as pd
 
 
@@ -15,7 +16,7 @@ def get_times(start_date: pd.Timestamp = pd.Timestamp('1970-01-01'), resolution:
     return pd.to_datetime(times)
 
 
-def get_idx(x: pd.Timestamp, arr: ArrayLike, start_date: pd.Timestamp = pd.Timestamp('1970-01-01')) -> int:
+def get_idx(x: Union[int,float,np.float64,pd.Timestamp], arr: ArrayLike, start_date: pd.Timestamp = pd.Timestamp('1970-01-01')) -> int:
     if type(x) != float and type(x) != int and type(x) != np.float64:
         if x.hour >= 19:
             x = pd.Timestamp(year=start_date.year, month=start_date.month, day=start_date.day, hour=x.hour, minute=x.minute)

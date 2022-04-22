@@ -38,12 +38,14 @@ def remove_data_from_other_years(df: pd.DataFrame, year: int, inplace: bool=Fals
     new_df.reset_index(inplace=True, drop=True)
     return None if inplace else new_df
 
+
 def sort_by_datetime(df: pd.DataFrame, inplace: bool=False) -> Optional[pd.DataFrame]:
     new_df = df if inplace else df.copy()
     new_df.sort_values(by='datetime', inplace=True)
     return None if inplace else new_df
 
-def read_everything(path: Union[Path, str], years: List[int]) -> List[pd.DataFrame]:
+
+def load(path: Union[Path, str], years: List[int]) -> List[pd.DataFrame]:
     path = Path(path)
     julia_data = [ pd.read_table(path / f"JULIA_ESF_{year}.txt", 
                                     sep='\s+',

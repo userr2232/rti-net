@@ -5,6 +5,7 @@ datasets:
   data: ${root}/data
   processed: ${root}/processed_data
   julia_data: ${.data}/juliadata/Data_Julia
+  geo_param: ${.data}/Completed_SAO_V3.hdf5
 
 data:
   years:

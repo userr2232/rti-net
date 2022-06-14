@@ -2,6 +2,7 @@ import hydra
 from omegaconf import DictConfig
 from src.preprocessing import load
 from src.processing import process
+from src.plots import inputs_plot, zoomed_plot
 
 
 @hydra.main(config_path="conf", config_name="config")
@@ -11,6 +12,10 @@ def main(cfg: DictConfig) -> None:
         print(load(path=cfg.datasets.julia_data, years=range(cfg.data.years.start, cfg.data.years.end+1)))
     elif action == "process":
         process(years=range(cfg.data.years.start, cfg.data.years.end+1), path=cfg.datasets.julia_data, save_path=cfg.datasets.processed)
+    elif action == "inputs_plot":
+        inputs_plot(path=cfg.datasets.geo_param)
+    elif action == "zoomed_plot":
+        zoomed_plot(geo_path=cfg.datasets.geo_param, rtis_path=cfg.datasets.processed)
 
 if __name__ == "__main__":
     main()

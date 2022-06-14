@@ -84,7 +84,7 @@ def process_day(data: pd.DataFrame, times: ArrayLike, heights: ArrayLike, save: 
         ESF_count[time_idx][height_idx] += 1
     ESF_bitmap = ESF_count > 10
     if save:
-        ESF_bitmap.tofile(path)
+        np.save(path, ESF_bitmap)
     return ESF_bitmap
 
 
@@ -106,7 +106,7 @@ def process_season(year: int, month: Month, data: pd.DataFrame, save: bool = Fal
     for date in dates:
         days_data = filter_times_and_heights(df=season, date=date.date())
         logging.info(f'processing day {date.date()}')
-        days_ESF_bitmap = process_day(data=days_data, times=times, heights=heights, save=save, path=path / (str(date.date()) + ".dat") if path is not None else None)
+        days_ESF_bitmap = process_day(data=days_data, times=times, heights=heights, save=save, path=path / (str(date.date())) if path is not None else None)
         logging.info(f'proccesed day {date.date()}')
         if days_ESF_bitmap is not None:
             total_occurrence += days_ESF_bitmap
@@ -118,7 +118,7 @@ def process_season(year: int, month: Month, data: pd.DataFrame, save: bool = Fal
                                     (month == 6 and (year == 2000 or year == 2001 or year == 2013))):
         occurrence_rate = total_occurrence / n_observed_days
     if save:
-        total_occurrence.tofile(path / f"{year}-{month}_{n_observed_days}.dat")
+        np.save(path / f"{year}-{month}_{n_observed_days}", total_occurrence)
     logging.info(f'processed season {year}-{month}')
     return total_occurrence, occurrence_rate, n_observed_days
 

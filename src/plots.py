@@ -1,7 +1,6 @@
 import matplotlib as mpl
 from matplotlib import dates as mdates
 from matplotlib import pyplot as plt
-from matplotlib.collections import LineCollection
 from typing import Union
 from pathlib import Path
 import pandas as pd
@@ -10,8 +9,6 @@ import numpy as np
 from src.processing import get_heights, get_times, days_of_early_ESF
 from numpy.typing import ArrayLike
 from matplotlib.axes import Axes
-import re
-import os
 
 
 plt.rcParams.update({"font.family": "serif", "font.serif": ["Palatino"]})

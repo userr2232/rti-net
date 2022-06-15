@@ -31,13 +31,13 @@ class Month(Enum):
 
 
 def get_heights(min_height: int = 200, max_height: int = 800, resolution: int = 1) -> ArrayLike:
-    return np.linspace(min_height, max_height, (max_height-min_height) // 100 * (100 // resolution) + 1, dtype=np.int16)
+    return np.linspace(min_height, max_height, (max_height-min_height) // 100 * (100 // resolution) + 1, dtype=np.int16)[:-1]
 
 
 def get_times(start_date: pd.Timestamp = pd.Timestamp('1970-01-01'), resolution: int = 1) -> ArrayLike:
     start_time = start_date + pd.Timedelta(19, unit='hours')
     end_time = pd.Timestamp((start_time.date() + pd.Timedelta(1, unit='days'))) + pd.Timedelta(7, unit='hours')
-    return pd.date_range(start=start_time, end=end_time, periods=(end_time-start_time).components.hours*(60 // resolution) + 1)
+    return pd.date_range(start=start_time, end=end_time, periods=(end_time-start_time).components.hours*(60 // resolution) + 1)[:-1]
 
 
 def get_idx(x: Union[int,float,np.float64,pd.Timestamp], arr: ArrayLike, start_date: pd.Timestamp = pd.Timestamp('1970-01-01')) -> int:
@@ -156,7 +156,6 @@ def plot_season(data: pd.DataFrame, year: int, month: Month, save: bool = False,
     if save:
         plt.savefig(path / f"{title}.pdf")
     logging.info(f'plotted season {year}-{month}')
-    # plt.show()
 
 
 def process(years: List[int], path: Union[Path, str],  save_path: Union[Path, str] = None) -> None:

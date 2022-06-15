@@ -7,9 +7,12 @@ from pathlib import Path
 import pandas as pd
 import h5py
 import numpy as np
-from src.processing import get_heights, get_times
+from src.processing import get_heights, get_times, days_of_early_ESF
 from numpy.typing import ArrayLike
 from matplotlib.axes import Axes
+import re
+import os
+
 
 plt.rcParams.update({"font.family": "serif", "font.serif": ["Palatino"]})
 
@@ -122,4 +125,31 @@ def zoomed_plot(geo_path: Union[Path,str], rtis_path: Union[Path,str], plot_rti:
     plt.xlim(pd.to_datetime('2017-03-05'), pd.to_datetime('2017-03-08'))
     plt.grid(b=True, which='major', color='k', linestyle='-', linewidth=0.2)
     plt.grid(b=True, which='minor', color='k', linestyle='--', linewidth=0.1)
+    plt.show()
+
+
+def plot_early_ESF_count(path: Union[Path,str]) -> None:
+    df = days_of_early_ESF(path)
+    df['LT'] = pd.to_datetime(df.LT)
+    df['YEAR'] = df.LT.dt.year
+    df['MONTH'] = df.LT.dt.month
+    df['HOUR'] = 0
+    df['ESF'] = df.ESF > 0
+    counts = df.groupby(['YEAR', 'MONTH']).agg('sum')
+    counts.reset_index(inplace=True)
+    counts['DAY'] = 1
+    counts['date'] = pd.to_datetime(counts.loc[:, ('YEAR', 'MONTH', 'DAY')])
+    counts.sort_values('date', inplace=True)
+    counts.reset_index(inplace=True, drop=True)
+    start_year, start_month = counts.date.iloc[0].date().year, counts.date.iloc[0].date().month
+    end_year, end_month = counts.date.iloc[-1].date().year, counts.date.iloc[-1].date().month
+    counts_complement = pd.DataFrame({'date': pd.date_range(pd.Timestamp(year=start_year, month=start_month, day=1), pd.Timestamp(year=end_year, month=end_month, day=1), freq='MS')})
+    new_counts = counts_complement.merge(counts, how='left', on='date')
+    new_counts.loc[new_counts['ESF'].isna(), 'ESF'] = 0
+    _, ax = plt.subplots(1, 1, figsize=(15, 3), tight_layout=True)
+    ax.plot(new_counts.date, new_counts.ESF, marker='.', linewidth=0.1, color='black', markersize=1)
+    ax.xaxis.set_major_locator(mdates.YearLocator())
+    ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=range(1, 13, 4)))
+    ax.set_ylabel('Early ESF counts')
+    ax.set_xlabel('Years')
     plt.show()

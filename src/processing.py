@@ -13,6 +13,9 @@ import matplotlib.dates as mdates
 import matplotlib.ticker as mticker
 import datetime
 import logging
+import re
+import os
+
 
 class Month(Enum):
     MARCH = 3
@@ -163,3 +166,18 @@ def process(years: List[int], path: Union[Path, str],  save_path: Union[Path, st
     for year in years: 
         for month in Month:
             plot_season(data=julia_data, year=year, month=month, save=save_path is not None, path=save_path)
+
+
+def days_of_early_ESF(path: Union[str,Path]) -> pd.DataFrame:
+    path = Path(path)
+    pattern = r"^\d\d_\d\d\d\d.csv$"
+    re_obj = re.compile(pattern)
+    _, _, filenames = next(os.walk(path), (None, None, []))
+    df = pd.DataFrame({})
+    for filename in filenames:
+        if re_obj.fullmatch(filename):
+            season_df = pd.read_csv(path / filename, parse_dates=['LT'], infer_datetime_format=True)
+            if not season_df.empty:
+                season_df = season_df.loc[(((season_df.LT.dt.hour == 19)&(season_df.LT.dt.hour >= 30))|((season_df.LT.dt.hour == 20) & (season_df.LT.dt.minute < 30)))].copy()
+                df = pd.concat([df, season_df], ignore_index=True)
+    return df.loc[(df.ESF > 0)].sort_values('LT').reset_index(drop=True)

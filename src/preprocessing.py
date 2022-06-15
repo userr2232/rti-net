@@ -53,7 +53,7 @@ def sort_by_datetime(df: pd.DataFrame, inplace: bool=False) -> Optional[pd.DataF
 
 def load(path: Union[Path, str], years: List[int]) -> List[pd.DataFrame]:
     path = Path(path)
-    julia_data = [ pd.read_table(path / f"JULIA_ESF_{year}.txt", 
+    julia_data = [ pd.read_table(path / f"Julia_ESF_{year}.txt", 
                                     sep='\s+',
                                     na_values='missing', 
                                     dtype={'UT1_UNIX': np.int64, 'GDALT': np.float, 'SNL': np.float}) \

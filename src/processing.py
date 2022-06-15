@@ -46,11 +46,11 @@ def get_idx(x: Union[int,float,np.float64,pd.Timestamp], arr: ArrayLike, start_d
             x = pd.Timestamp(year=start_date.year, month=start_date.month, day=start_date.day, hour=x.hour, minute=x.minute)
         else:
             x = pd.Timestamp(year=start_date.year, month=start_date.month, day=start_date.day+1, hour=x.hour, minute=x.minute)
-    if x > arr[-1] or x < arr[0]:
-        raise ValueError("x is not within arr's domain")
+    delta = arr[1] - arr[0]
+    if x > arr[-1] + delta or x < arr[0]:
+        raise ValueError(f"{x} is not within arr's domain [{arr[0]}, {arr[-1]}]")
     n = len(arr)
     lo, hi = 0, n-2
-    delta = arr[1] - arr[0]
     m = None
     while lo <= hi:
         m = (lo + hi) // 2

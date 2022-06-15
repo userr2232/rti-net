@@ -71,7 +71,7 @@ def get_idxs(time: pd.Timestamp, height: Union[int,float,np.float64], times: Arr
     return get_idx(time, times), get_idx(height, heights)
 
 
-def process_day(data: pd.DataFrame, times: ArrayLike, heights: ArrayLike, save: bool = False, path: Union[Path,str] = None) -> Optional[ArrayLike]:
+def process_day(data: pd.DataFrame, times: ArrayLike, heights: ArrayLike, snr_thr: int, count_thr: int, save: bool = False, path: Union[Path,str] = None) -> Optional[ArrayLike]:
     if data.empty:
         return None
     if save:
@@ -82,16 +82,16 @@ def process_day(data: pd.DataFrame, times: ArrayLike, heights: ArrayLike, save: 
     ESF_count = np.zeros((len(times), len(heights)))
     for row in data.itertuples():
         time, height, snr = attrgetter('datetime', 'GDALT', 'SNL')(row)
-        if snr <= -20: continue
+        if snr <= snr_thr: continue
         time_idx, height_idx = get_idxs(time=time, height=height, times=times, heights=heights)
         ESF_count[time_idx][height_idx] += 1
-    ESF_bitmap = ESF_count > 10
+    ESF_bitmap = ESF_count > count_thr
     if save:
         np.save(path, ESF_bitmap)
     return ESF_bitmap
 
 
-def process_season(year: int, month: Month, data: pd.DataFrame, save: bool = False, path: Union[str,Path] = None) -> Tuple[ArrayLike, ArrayLike, int]:
+def process_season(year: int, month: Month, data: pd.DataFrame, snr_thr: int, count_thr: int, save: bool = False, path: Union[str,Path] = None) -> Tuple[ArrayLike, ArrayLike, int]:
     logging.info(f'processing season {year}-{month}')
     if save:
         if path is None:
@@ -109,7 +109,9 @@ def process_season(year: int, month: Month, data: pd.DataFrame, save: bool = Fal
     for date in dates:
         days_data = filter_times_and_heights(df=season, date=date.date())
         logging.info(f'processing day {date.date()}')
-        days_ESF_bitmap = process_day(data=days_data, times=times, heights=heights, save=save, path=path / (str(date.date())) if path is not None else None)
+        days_ESF_bitmap = process_day(data=days_data, times=times, heights=heights, 
+                                        snr_thr=snr_thr, count_thr=count_thr, 
+                                        save=save, path=path / (str(date.date())) if path is not None else None)
         logging.info(f'proccesed day {date.date()}')
         if days_ESF_bitmap is not None:
             total_occurrence += days_ESF_bitmap
@@ -126,7 +128,7 @@ def process_season(year: int, month: Month, data: pd.DataFrame, save: bool = Fal
     return total_occurrence, occurrence_rate, n_observed_days
 
 
-def plot_season(data: pd.DataFrame, year: int, month: Month, save: bool = False, path: Union[str,Path] = None) -> None:
+def plot_season(data: pd.DataFrame, year: int, month: Month, snr_thr: int, count_thr: int, save: bool = False, path: Union[str,Path] = None) -> None:
     logging.info(f'plotting season {year}-{month}')
     if save:
         if path is None:
@@ -146,7 +148,9 @@ def plot_season(data: pd.DataFrame, year: int, month: Month, save: bool = False,
     ax.tick_params('both', length=20, width=1, which='minor')
     ax.set_ylim(200, 600)
     heights, times = get_heights(resolution=20), get_times(resolution=15)
-    _, occurrence_rate, _ = process_season(year=year, month=month, data=data, save=save, path=path)
+    _, occurrence_rate, _ = process_season(year=year, month=month, data=data, 
+                                            snr_thr=snr_thr, count_thr=count_thr, 
+                                            save=save, path=path)
     plt.pcolor(times, heights, occurrence_rate.T, cmap='jet')
     plt.clim(0, 0.6)
     title = f"Spread F occurrence rate for {month.describe()} - {year}"
@@ -158,13 +162,17 @@ def plot_season(data: pd.DataFrame, year: int, month: Month, save: bool = False,
     logging.info(f'plotted season {year}-{month}')
 
 
-def process(years: List[int], path: Union[Path, str],  save_path: Union[Path, str] = None) -> None:
+def process(years: List[int], path: Union[Path, str],  snr_thr: int = -20, count_thr: int = 10, save_path: Union[Path, str] = None) -> None:
     logging.basicConfig(format='%(asctime)s %(message)s')
     julia_data: List[pd.DataFrame] = load(path=path, years=years)
     julia_data: pd.DataFrame = pd.concat(julia_data, axis=0, ignore_index=True)
     for year in years: 
         for month in Month:
-            plot_season(data=julia_data, year=year, month=month, save=save_path is not None, path=save_path)
+            plot_season(data=julia_data, 
+                        year=year, month=month, 
+                        snr_thr=snr_thr, count_thr=count_thr,
+                        save=save_path is not None, 
+                        path=save_path)
 
 
 def days_of_early_ESF(path: Union[str,Path]) -> pd.DataFrame:

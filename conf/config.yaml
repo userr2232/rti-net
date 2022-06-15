@@ -7,6 +7,10 @@ datasets:
   julia_data: ${.data}/juliadata/Data_Julia
   geo_param: ${.data}/Completed_SAO_V3.hdf5
 
+thr:
+  snr: -20
+  count: 10
+
 data:
   years:
     start: 2000

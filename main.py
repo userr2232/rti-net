@@ -11,7 +11,9 @@ def main(cfg: DictConfig) -> None:
     if action == "load":
         print(load(path=cfg.datasets.julia_data, years=range(cfg.data.years.start, cfg.data.years.end+1)))
     elif action == "process":
-        process(years=range(cfg.data.years.start, cfg.data.years.end+1), path=cfg.datasets.julia_data, save_path=cfg.datasets.processed)
+        process(years=range(cfg.data.years.start, cfg.data.years.end+1), path=cfg.datasets.julia_data, 
+                save_path=cfg.datasets.processed, 
+                snr_thr=cfg.thr.snr, count_thr=cfg.thr.count)
     elif action == "inputs_plot":
         inputs_plot(path=cfg.datasets.geo_param)
     elif action == "zoomed_plot":

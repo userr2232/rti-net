@@ -2,7 +2,7 @@ import hydra
 from omegaconf import DictConfig
 from src.preprocessing import load
 from src.processing import process
-from src.plots import inputs_plot, zoomed_plot, plot_early_ESF_count, plot_early_ESF_comparison
+from src.plots import inputs_plot, zoomed_plot, plot_early_ESF_count, plot_early_ESF_comparison, plot_early_ESF_comparison_v2
 from pathlib import Path
 
 
@@ -22,6 +22,7 @@ def main(cfg: DictConfig) -> None:
         plot_early_ESF_count(path=cfg.datasets.julia_data)
     elif action == "plot_early_ESF_comparison":
         plot_early_ESF_comparison(path=Path(cfg.root) / "thresholds", snr_thrs=[-10, -20, -40], count_thrs=[5, 10, 20])
-
+    elif action == "plot_early_ESF_comparison_v2":
+        plot_early_ESF_comparison_v2(path=Path(cfg.root) / "thresholds", snr_thrs=[-10, -20, -40], count_thrs=[5, 10, 20])
 if __name__ == "__main__":
     main()

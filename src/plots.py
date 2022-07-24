@@ -1,7 +1,7 @@
 import matplotlib as mpl
 from matplotlib import dates as mdates
 from matplotlib import pyplot as plt
-from typing import Union
+from typing import Union, List
 from pathlib import Path
 import pandas as pd
 import h5py
@@ -10,9 +10,9 @@ from src.processing import days_of_early_ESF
 from src.utils import get_heights, get_times
 from numpy.typing import ArrayLike
 from matplotlib.axes import Axes
-from typing import List
-from itertools import product
 from src.postprocessing import daily_npys_to_1D_occurrence_df
+import matplotlib.lines as mlines
+
 
 
 plt.rcParams.update({"font.family": "serif", "font.serif": ["Palatino"]})
@@ -128,18 +128,16 @@ def zoomed_plot(geo_path: Union[Path,str], rtis_path: Union[Path,str], plot_rti:
     plt.grid(b=True, which='minor', color='k', linestyle='--', linewidth=0.1)
     plt.show()
 
-
-def plot_early_ESF_count(path: Union[Path,str], ax: Axes = None, set_labels: bool = True, read_npys: bool = False) -> None:
-    df = None
-    if read_npys:
-        df = daily_npys_to_1D_occurrence_df(path)
-    else:
-        df = days_of_early_ESF(path=path)
+def _compute_counts_per_month(df: pd.DataFrame) -> None:
+    df = df.loc[(((df.LT.dt.hour == 19)&(df.LT.dt.minute >= 30))|((df.LT.dt.hour == 20)&(df.LT.dt.minute < 30)))].copy()
     df['LT'] = pd.to_datetime(df.LT)
     df['YEAR'] = df.LT.dt.year
     df['MONTH'] = df.LT.dt.month
-    df['HOUR'] = 0
     df['ESF'] = df.ESF > 0
+    df['date'] = df.LT.dt.date
+    df['ESF'] = df.groupby('date').ESF.transform(lambda x: x.any())
+    df.drop_duplicates('date', inplace=True)
+    df.reset_index(drop=True, inplace=True)
     counts = df.groupby(['YEAR', 'MONTH']).agg('sum')
     counts.reset_index(inplace=True)
     counts['DAY'] = 1
@@ -148,18 +146,56 @@ def plot_early_ESF_count(path: Union[Path,str], ax: Axes = None, set_labels: boo
     counts.reset_index(inplace=True, drop=True)
     start_year, start_month = counts.date.iloc[0].date().year, counts.date.iloc[0].date().month
     end_year, end_month = counts.date.iloc[-1].date().year, counts.date.iloc[-1].date().month
-    counts_complement = pd.DataFrame({'date': pd.date_range(pd.Timestamp(year=start_year, month=start_month, day=1), pd.Timestamp(year=end_year, month=end_month, day=1), freq='MS')})
-    new_counts = counts_complement.merge(counts, how='left', on='date')
+    counts_date_range = pd.DataFrame({'date': pd.date_range(pd.Timestamp(year=start_year, month=start_month, day=1), pd.Timestamp(year=end_year, month=end_month, day=1), freq='MS')})
+    new_counts = counts_date_range.merge(counts, how='left', on='date')
     new_counts.loc[new_counts['ESF'].isna(), 'ESF'] = 0
+    return new_counts
+
+def plot_early_ESF_diff(path: Union[Path,str], ax: Axes = None, set_labels: bool = True, read_npys: bool = False, marker: str='.', color: str='k', markersize: int=1) -> None:
+    path = Path(path)
+    print("path", path)
+    df = None
+    baseline_df = daily_npys_to_1D_occurrence_df(path.parent / "snr_20_count_10")
+    if read_npys:
+        df = daily_npys_to_1D_occurrence_df(path)
+    else:
+        df = days_of_early_ESF(path=path)
+    print("df", df)
+    counts = _compute_counts_per_month(df)
+    baseline_counts = _compute_counts_per_month(baseline_df)
+
+    counts = counts.merge(baseline_counts, on='date')
+    counts['ESF_diff'] = counts.ESF_x - counts.ESF_y
+    # print("merged", counts)
     if ax is None:
         _, ax = plt.subplots(1, 1, figsize=(15, 3), tight_layout=True)
-    ax.plot(new_counts.date, new_counts.ESF, marker='.', linewidth=0.1, color='black', markersize=1)
+    ax.plot(counts.date, counts.ESF_diff, marker=marker, linewidth=0.1, color=color, markersize=markersize, fillstyle='none')
     ax.xaxis.set_major_locator(mdates.YearLocator(3))
     ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=range(1, 13, 4)))
     if set_labels:
         ax.set_ylabel('Early ESF counts')
         ax.set_xlabel('Years')
+    
 
+
+def plot_early_ESF_count(path: Union[Path,str], ax: Axes = None, set_labels: bool = True, read_npys: bool = False, marker: str = '.', color: str = 'k', markersize: int = 1) -> None:
+    path = Path(path)
+    df = None
+    if read_npys:
+        df = daily_npys_to_1D_occurrence_df(path)
+    else:
+        df = days_of_early_ESF(path=path)
+    counts = _compute_counts_per_month(df)
+    print("merged", counts)
+    if ax is None:
+        _, ax = plt.subplots(1, 1, figsize=(15, 3), tight_layout=True)
+    ax.plot(counts.date, counts.ESF, marker=marker, linewidth=0.3, color=color, markersize=markersize, fillstyle='none')
+    ax.xaxis.set_major_locator(mdates.YearLocator(3))
+    ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=range(1, 13, 4)))
+    if set_labels:
+        ax.set_ylabel('Early ESF counts')
+        ax.set_xlabel('Years')
+    
 
 def plot_early_ESF_comparison(path: Union[Path,str], snr_thrs: List[int], count_thrs: List[int]) -> None:
     path = Path(path)
@@ -167,7 +203,7 @@ def plot_early_ESF_comparison(path: Union[Path,str], snr_thrs: List[int], count_
     for i, snr in enumerate(snr_thrs):
         for j, count in enumerate(count_thrs):
             if  snr == -20 or count == 10:
-                plot_early_ESF_count(path / f"snr_{-snr}_count_{count}", ax[i][j], set_labels=False, read_npys=True)
+                plot_early_ESF_diff(path / f"snr_{-snr}_count_{count}", ax[i][j], set_labels=False, read_npys=True)
                 if i == 0: 
                     ax[0][j].set_xlabel(count)
                     ax[0][j].xaxis.set_label_position('top')
@@ -176,5 +212,32 @@ def plot_early_ESF_comparison(path: Union[Path,str], snr_thrs: List[int], count_
     fig.text(0.01, 0.5, 'SNR Threshold', rotation='vertical', va='center')
     fig.text(0.5, 0.86, 'Count Threshold', ha='center')
     plt.subplots_adjust(left=0.055, bottom=0.15, right=0.945, top=0.8, wspace=0.04, hspace=0.1)
-    fig.suptitle("ESF occurrence between 1930 and 2030 LT")
+    fig.suptitle("ESF occurrences per month w.r.t. to baseline (between 1930 and 2030 LT)")
+    plt.show()
+
+
+def plot_early_ESF_comparison_v2(path: Union[Path,str], snr_thrs: List[int], count_thrs: List[int]) -> None:
+    path = Path(path)
+    fig, ax = plt.subplots(2, 1, sharex=True, figsize=(15, 7), tight_layout=True)
+    k = 0
+    markers = ['P', 'v', 's', 'X']
+    colors = ['m', 'g', 'r', 'c']
+    snrs_counts = []
+
+    for snr in snr_thrs:
+        for count in count_thrs:
+            if (snr == -20 or count == 10) and not (snr == -20 and count == 10):
+                snrs_counts.append((snr, count))
+                plot_early_ESF_diff(path / f"snr_{-snr}_count_{count}", ax[0], set_labels=False, read_npys=True, marker=markers[k], color=colors[k], markersize=4)
+                k += 1
+    
+    legend_markers = [mlines.Line2D([], [], color=color, marker=marker, 
+                        linestyle='none', fillstyle='none', markersize=5, label=f"SNR thr.: {snr}, count thr.: {count}") 
+                        for color, marker, (snr, count) in zip(colors, markers, snrs_counts)]
+    ax[0].legend(handles=legend_markers, fontsize=7.9)
+    ax[0].set_ylabel('Occurrences w.r.t baseline')
+    ax[1].set_ylabel('Baseline occurrences')
+    ax[1].set_xlabel('Months')
+    fig.suptitle("ESF occurrences per month between 1930 and 2030 LT")
+    plot_early_ESF_count(path / f"snr_20_count_10", ax=ax[1], set_labels=False, read_npys=True)
     plt.show()

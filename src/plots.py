@@ -1,18 +1,29 @@
 import matplotlib as mpl
 from matplotlib import dates as mdates
-from matplotlib import pyplot as plt
+from matplotlib import (
+    pyplot as plt,
+    dates as mdates)
 from typing import Union, List
 from pathlib import Path
 import pandas as pd
 import h5py
 import numpy as np
-from src.processing import days_of_early_ESF
-from src.utils import get_heights, get_times
 from numpy.typing import ArrayLike
 from matplotlib.axes import Axes
-from src.postprocessing import daily_npys_to_1D_occurrence_df
 import matplotlib.lines as mlines
+import seaborn as sns
+from omegaconf import DictConfig
+from math import floor
 
+
+from src.processing import days_of_early_ESF
+from src.utils import get_heights, get_times
+from src.postprocessing import daily_npys_to_1D_occurrence_df
+from src.utils import (
+    convert_idx_to_quantity, 
+    convert_float_idx_to_quantity,
+    convert_float_idx_to_quantity2)
+from src.inference import test
 
 
 plt.rcParams.update({"font.family": "serif", "font.serif": ["Palatino"]})
@@ -97,15 +108,16 @@ def zoomed_plot(geo_path: Union[Path,str], rtis_path: Union[Path,str], plot_rti:
     sao.reset_index(inplace=True)
     _, ax = plt.subplots(2 + (int(plot_rti)), 1, sharex=True, tight_layout=True, figsize=(15, 4), gridspec_kw={'height_ratios': [1, 3, 9] if plot_rti else [1, 4]})
     sao = sao.loc[((sao.datetime >= pd.to_datetime('2017-03-05'))&(sao.datetime <= pd.to_datetime('2017-03-08')))].copy()
-    rti1 = np.load(rtis_path / ('2017-03-04' + '.npy'))
-    rti2 = np.load(rtis_path / ('2017-03-05' + '.npy'))
-    rti3 = np.load(rtis_path / ('2017-03-06' + '.npy'))
-    rti4 = np.load(rtis_path / ('2017-03-07' + '.npy'))
+    rti1 = np.load(rtis_path / ('2017-03-04' + '.npy'))#[:-1,:-1]
+    rti2 = np.load(rtis_path / ('2017-03-05' + '.npy'))#[:-1,:-1]
+    rti3 = np.load(rtis_path / ('2017-03-06' + '.npy'))#[:-1,:-1]
+    rti4 = np.load(rtis_path / ('2017-03-07' + '.npy'))#[:-1,:-1]
     heights = get_heights(resolution=20)
     times1 = get_times(pd.Timestamp('2017-03-04'), resolution=15)
     times2 = get_times(pd.Timestamp('2017-03-05'), resolution=15)
     times3 = get_times(pd.Timestamp('2017-03-06'), resolution=15)
     times4 = get_times(pd.Timestamp('2017-03-07'), resolution=15)
+    print("SHAPES:", rti1.shape, times1.shape, heights.shape)
     plot_compacted_spreadF(spreadF_map=rti1, times=times1, heights=heights, ax=ax[0], plot_rti=plot_rti)
     plot_compacted_spreadF(spreadF_map=rti2, times=times2, heights=heights, ax=ax[0], plot_rti=plot_rti)
     plot_compacted_spreadF(spreadF_map=rti3, times=times3, heights=heights, ax=ax[0], plot_rti=plot_rti)
@@ -241,3 +253,79 @@ def plot_early_ESF_comparison_v2(path: Union[Path,str], snr_thrs: List[int], cou
     fig.suptitle("ESF occurrences per month between 1930 and 2030 LT")
     plot_early_ESF_count(path / f"snr_20_count_10", ax=ax[1], set_labels=False, read_npys=True)
     plt.show()
+
+
+def plot_categorical_distribution(data: pd.DataFrame, feature_name: str) -> None:
+    ax = sns.countplot(data=data, x=feature_name, palette="ch:.25")
+    if "time" in feature_name:
+        order = get_times(resolution=15).map(lambda x: x.isoformat()).tolist()
+        ax = sns.countplot(data=data, x=feature_name, palette="ch:.25", order=order)
+        xticks = ax.get_xticklabels()
+        # print(g.ax.get_xticklabels())
+        ax.set_xticklabels([pd.to_datetime(text_obj.get_text()).strftime('%H:%M') for text_obj in xticks],rotation=50)
+    plt.show()
+
+
+def plot_categorical_feature_distribution(df: pd.DataFrame, feature_name: str='onset_time_idx') -> None:
+    '''
+    df: 
+        DataFrame that contains the feature to plot
+    feature_name:
+        str with possible values of: 
+        onset_time_idx, end_time_idx, max_height_idx or other name. 
+        Note that if it contains "idx" it converts it to a physical quantity
+    '''
+    # series: pd.Series = df[feature_name]
+    if 'idx' in feature_name:
+        df[f"{feature_name}_quantity"] = convert_idx_to_quantity(df, feature_name)
+    plot_categorical_distribution(df, feature_name=f"{feature_name}_quantity")
+
+
+def plot_correlations(data: pd.DataFrame) -> None:
+    sns.heatmap(data.loc[:, ['V_hF_prev', 'delta_hF_div_delta_time', 
+    'foF2', 'V_hF', 'F10.7', 'AP', 'AP (24h)', 'F10.7 (90d dev.)',
+    'onset_time_idx', 'end_time_idx', 'max_height_idx']].corr());
+    plt.show()
+
+
+def plot_pred_timeseries(cfg: DictConfig) -> None: # obsolete bc convert_float_idx_to_quantity2 should be used instead
+    data = test(cfg)
+    targets = cfg.model.targets
+
+    def to_quantity(data: pd.DataFrame, feature_name: str) -> None: # converts to quantity inplace
+        data[feature_name] = convert_float_idx_to_quantity(df = data,
+                                                            feature_name = feature_name)
+
+    for target in targets:
+        print(data[[target, f'{target}_output']])
+        to_quantity(data, target)
+        to_quantity(data, f'{target}_output')
+        data.plot(x = 'LT', y = [target, f'{target}_output'], style='.')
+        if 'time' in target:
+            print(data[[target, f'{target}_output']])
+            formatter = mdates.DateFormatter('%H:%M')
+            plt.gca().yaxis.set_major_formatter(formatter)
+        plt.show()
+
+        # sampleado por 15 min
+        # horas: 7:00, 7:15, 7:30, ....
+        # idx: 0 1 2 3 ... 48
+        # transform: 0 0.001 0.002 ... 1 f
+        # 19:00 + f * 12 * 60 * 60
+
+
+def plot_pred_timeseries2(cfg: DictConfig) -> None:
+    data = test(cfg)
+    targets = cfg.model.targets
+
+    data = convert_float_idx_to_quantity2(scaled_df = data,
+                                            scaler_path = Path(cfg.model.path) / cfg.model.scaler_checkpoint)
+
+    for target in targets:
+        print(data[[target, f'{target}_output']])
+        data.plot(x = 'LT', y = [target, f'{target}_output'], style='.')
+        if 'time' in target:
+            print(data[[target, f'{target}_output']])
+            formatter = mdates.DateFormatter('%H:%M')
+            plt.gca().yaxis.set_major_formatter(formatter)
+        plt.show()

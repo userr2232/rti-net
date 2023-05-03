@@ -1,11 +1,17 @@
 root: ???
 action: ???
 
+study_name: preliminary_tests
+
 datasets:
   data: ${root}/data
   processed: ${root}/processed_data
-  julia_data: ${.data}/juliadata/Data_Julia
+  julia: ${.data}/juliadata/Data_Julia
   geo_param: ${.data}/Completed_SAO_V3.hdf5
+  partitioned: ${.processed}/partitioned
+
+preprocessing:
+  delta_hours: 1
 
 thr:
   snr: -20
@@ -13,5 +19,57 @@ thr:
 
 data:
   years:
-    start: 2000
+    start: 2002
     end: 2020
+
+training:
+  epochs: 40
+  device: cuda
+  logger: trainer
+  patience: 10
+
+hpo:
+  ntrials: 1000
+  logger: study
+  min_lr: 1e-4
+  max_lr: 1e-3
+  min_nlayers: 5
+  max_nlayers: 15
+  min_nunits: 16
+  max_nunits: 128
+  min_dropout: 0.01
+  max_dropout: 0.1
+  rdb: mysql+pymysql://userr2232@127.0.0.1/rti_net
+
+cross_validation:
+  mode: sliding_window
+  training_window_length: 2
+  validation_window_length: 1
+
+model:
+  path: ${root}/models
+  nn_checkpoint: ${study_name}.pt
+  scaler_checkpoint: scaler.gz
+  kwargs:
+    batch_size: 16
+  features:
+    - foF2
+    - V_hF
+    - V_hF_prev
+    - delta_hF_div_delta_time
+    - F10.7
+    - F10.7 (90d)
+    - AP
+    - AP (24h)
+    - DNS
+    - DNC
+  targets:
+    - onset_time_idx
+    - end_time_idx
+    - max_height_idx
+
+final:
+  split:
+    train: 70
+    valid: 20
+  logger: final

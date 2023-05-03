@@ -1,13 +1,10 @@
-from argparse import ArgumentError
 from operator import attrgetter
 from re import L
 import numpy as np
 from numpy.typing import ArrayLike
 from typing import Union, Tuple, Optional, List
 import pandas as pd
-from src.utils import valid_time, valid_height, filter_times_and_heights
 from pathlib import Path
-from src.preprocessing import load
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.ticker as mticker
@@ -15,38 +12,14 @@ import datetime
 import logging
 import re
 import os
-from src.utils import Month, get_heights, get_times
+from sklearn.preprocessing import MinMaxScaler
 
 
-def get_idx(x: Union[int,float,np.float64,pd.Timestamp], arr: ArrayLike, start_date: pd.Timestamp = pd.Timestamp('1970-01-01')) -> int:
-    if type(x) != float and type(x) != int and type(x) != np.float64:
-        if x.hour >= 19:
-            x = pd.Timestamp(year=start_date.year, month=start_date.month, day=start_date.day, hour=x.hour, minute=x.minute)
-        else:
-            x = pd.Timestamp(year=start_date.year, month=start_date.month, day=start_date.day+1, hour=x.hour, minute=x.minute)
-    delta = arr[1] - arr[0]
-    if x > arr[-1] + delta or x < arr[0]:
-        raise ValueError(f"{x} is not within arr's domain [{arr[0]}, {arr[-1]}]")
-    n = len(arr)
-    lo, hi = 0, n-2
-    m = None
-    while lo <= hi:
-        m = (lo + hi) // 2
-        if x >= arr[m] and x < arr[m] + delta:
-            return m
-        if x >= arr[m] + delta:
-            lo = m + 1
-        else:
-            hi = m - 1
-    return m
+from src.preprocessing import load
+from src.utils import valid_time, valid_height, filter_times_and_heights
+from src.utils import Month, get_heights, get_times, get_idx, get_idxs
+from src.model import Scaler
 
-
-def get_idxs(time: pd.Timestamp, height: Union[int,float,np.float64], times: ArrayLike, heights: ArrayLike):
-    if not valid_height(height):
-        raise ValueError("Height out of bounds")
-    if not valid_time(time):
-        raise ValueError("Time out of bounds")
-    return get_idx(time, times), get_idx(height, heights)
 
 
 def process_day(data: pd.DataFrame, times: ArrayLike, heights: ArrayLike, snr_thr: int, count_thr: int, save: bool = False, path: Union[Path,str] = None) -> Optional[ArrayLike]:
@@ -170,3 +143,59 @@ def days_of_early_ESF(df: pd.DataFrame = None, path: Union[str,Path] = None) -> 
         df = df.loc[(((season_df.LT.dt.hour == 19)&(season_df.LT.dt.hour >= 30))|((season_df.LT.dt.hour == 20) & (season_df.LT.dt.minute < 30)))].copy()
     print("df", df)
     return df.loc[(df.ESF > 0)].sort_values('LT').reset_index(drop=True)
+
+
+def process_dataframe(columns: List[str], 
+                        df: pd.DataFrame, 
+                        scaler: Optional[Union[Scaler, str, Path]] = None, 
+                        scaler_save_path: Optional[Union[str, Path]] = None) \
+                        -> Tuple[pd.DataFrame, Scaler]:
+    """
+    Returns a scaled DataFrame and the Scaler used.
+    
+    Parameters
+    ----------
+
+    columns : List[str]
+        The columns consisting of features + targets
+    df : pandas.DataFrame
+        The DataFrame with the columns to scale
+    scaler : Union[Scaler, str, Path], default None
+        The Scaler object to use or a path to a saved one
+    scaler_save_path : Union[Path, str], default None
+        The path in which we want to save the 'scaler' or a newly created one if scaler is None
+    keep_LT : bool, default False
+        Whether or not to keep the 'LT' column in 'df'
+            
+    Returns
+    -------
+    Tuple[pandas.DataFrame, Scaler]
+        A tuple consisting of a scaled DataFrame and the scaler object used
+    """
+
+    new_df = df.copy()
+
+    columns_to_scale = pd.Index(columns).intersection(new_df.columns)
+
+    if len(columns_to_scale) + len(['DNC', 'DNS']) < len(columns):
+        raise ValueError(f"Expected columns are {columns}, but only {columns_to_scale.tolist()} are present.")
+    
+    if scaler is None:
+        scaler = Scaler(df=df, columns=sorted(columns_to_scale.tolist()))
+    else:
+        if isinstance(scaler, str) or isinstance(scaler, Path):
+            scaler: Scaler = Scaler.load(scaler)
+        elif not isinstance(scaler, Scaler):
+            raise ValueError("The \'scaler\' argument must be of type Scaler or str or Path")
+    if scaler_save_path is not None:
+        scaler.save(path=scaler_save_path)
+    
+    new_df[columns_to_scale] = scaler.transform(new_df)
+
+    D = new_df.LT_y.dt.dayofyear
+    new_df['DNS'] = np.sin(2 * np.pi * D / 365)
+    new_df['DNC'] = np.cos(2 * np.pi * D / 365)
+
+    final_columns = columns_to_scale.tolist() + ['DNS', 'DNC'] + ['LT-1h']
+
+    return new_df.loc[:, new_df.columns.intersection(final_columns)].copy(), scaler
